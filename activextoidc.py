@@ -14,7 +14,7 @@ IUf you're doing this on Vista, remember to run regsvr32 from an elevated cmd.ex
 """
 from noobdoesre:
 I changed a bit script of https://github.com/kbandla for you to create and .idc file on the fly
-Copy-paste the contents of file you got and put it into File->IDC Command windows in IDA
+Copy-paste the contents of file you got and put it into File->IDC Command window in IDA
 """
 
 from ctypes import *
@@ -45,7 +45,7 @@ class MEMORY_BASIC_INFORMATION(Structure):
 
 
 def usage(imm):
-   imm.log("Usage: !activextoidc <name of dll> <full path to idcFile>")
+   imm.log("Usage: !activextoidc <name of dll> <base address in ida> <full path to idcFile>")
 
 def get_linear_address(address):
    mbi = MEMORY_BASIC_INFORMATION()
@@ -100,7 +100,8 @@ def main(args):
 
    try:
       activex = args[0]
-      idcFilePath = args[1]
+      idaBase = int(args[1], 16)
+      idcFilePath = args[2]
 
    except:
       usage(imm)
@@ -108,7 +109,7 @@ def main(args):
 
    module = imm.getModule(activex)
    if not module:
-      return "Module \"%s\" not found. Chech the Executable modules (Alt+E)" % activex
+      return "Module \"%s\" not found. Check the Executable modules (Alt+E)" % activex
    
    imm.addKnowledge("codebase",module.getCodebase(),force_add=1)
    tlib = LoadTypeLib(module.getPath())
@@ -131,10 +132,12 @@ def main(args):
                            p_iunknown = CoCreateInstance(p_type_attr.guid)
                            if p_iunknown:
                               enum_type_info_members(p_iref_type_info,p_reftype_attr,p_iunknown,imm,\
-                                 module.getBaseAddress(), module.getBase(), module.getSize(), idcFile)
+                                 module.getBaseAddress(), idaBase, module.getSize(), idcFile)
                i+=1
 
-   except:
+   except IOError:
       return "Can't open log file"
+   except:
+      return "Error creating some class \(-_-)/"
 
    return "Go on and rename em all!"
