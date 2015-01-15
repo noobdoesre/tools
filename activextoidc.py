@@ -43,8 +43,7 @@ class MEMORY_BASIC_INFORMATION(Structure):
 
 
 def usage(imm):
-    imm.log('Usage: !activextoidc <name of dll> <base address in ida> <full path to idcFile>'
-            )
+    imm.log('Usage: !activextoidc <name of dll> <base address in ida> <full path to idcFile>')
 
 
 def get_linear_address(address):
@@ -88,15 +87,13 @@ def enum_type_info_members(
                     break
 
         if value is not None and lpVtbl[0x0][i] is not None:
-            if func_desc.invkind == INVOKE_FUNC or func_desc.invkind \
-                == INVOKE_PROPERTYPUT or func_desc.invkind \
-                == INVOKE_PROPERTYPUTREF:
+            if func_desc.invkind == INVOKE_FUNC or func_desc.invkind == INVOKE_PROPERTYPUT or func_desc.invkind \
+																						== INVOKE_PROPERTYPUTREF:
                 address = lpVtbl[0x0][i] - (value + 0x1000)
                 address = address + code_base
         else:
-            if func_desc.invkind == INVOKE_FUNC or func_desc.invkind \
-                == INVOKE_PROPERTYPUT or func_desc.invkind \
-                == INVOKE_PROPERTYPUTREF:
+            if func_desc.invkind == INVOKE_FUNC or func_desc.invkind == INVOKE_PROPERTYPUT or func_desc.invkind \
+																						== INVOKE_PROPERTYPUTREF:
                 try:
                     address = imm.readLong(vtable + i * 4)
                 except Exception:
@@ -125,8 +122,7 @@ def main(args):
 
     module = imm.getModule(activex)
     if not module:
-        return 'Module "%s" not found. Check the Executable modules (Alt+E)' \
-            % activex
+        return 'Module "%s" not found. Check the Executable modules (Alt+E)' % activex
 
     imm.addKnowledge('codebase', module.getCodebase(), force_add=1)
     tlib = LoadTypeLib(module.getPath())
@@ -141,16 +137,12 @@ def main(args):
                     p_type_attr = p_itype_info.GetTypeAttr()
                     if p_type_attr.typekind is TKIND_COCLASS:
                         for ref in range(p_type_attr.cImplTypes):
-                            h_ref_type = \
-                                p_itype_info.GetRefTypeOfImplType(ref)
+                            h_ref_type = p_itype_info.GetRefTypeOfImplType(ref)
                             if h_ref_type:
-                                p_iref_type_info = \
-                                    p_itype_info.GetRefTypeInfo(h_ref_type)
+                                p_iref_type_info = p_itype_info.GetRefTypeInfo(h_ref_type)
                                 if p_iref_type_info:
-                                    p_reftype_attr = \
-    p_iref_type_info.GetTypeAttr()
-                                    p_iunknown = \
-    CoCreateInstance(p_type_attr.guid)
+                                    p_reftype_attr = p_iref_type_info.GetTypeAttr()
+                                    p_iunknown = CoCreateInstance(p_type_attr.guid)
                                     if p_iunknown:
                                         enum_type_info_members(
                                             p_iref_type_info,
@@ -164,13 +156,9 @@ def main(args):
                                             )
                     i += 1
     except IOError:
-
         return "Can't open log file"
+		
     except:
         return "Error creating some class \(-_-)/"
 
-    return 'Go on and rename em all!'
-
-
-
-			
+    return 'Go on and rename em all!'			
