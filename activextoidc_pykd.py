@@ -19,6 +19,9 @@ from noobdoesre:
 I changed the original script of https://github.com/kbandla/ to bring another one handy function
 """
 
+from pykd import *
+import sys
+import pefile
 from ctypes import *
 from ctypes.wintypes import *
 try:
@@ -27,8 +30,6 @@ try:
     from comtypes.automation import *
 except ImportError:
     raise Exception('Comtypes library needed')
-
-from immlib import *
 
 ole32 = windll.ole32
 kernel32 = windll.kernel32
@@ -47,8 +48,8 @@ class MEMORY_BASIC_INFORMATION(Structure):
         ]
 
 
-def usage(imm):
-    imm.log('Usage: !activextoidc <name of dll> <base address in ida> <full path to idcFile>')
+def usage():
+    print('Usage: !py activextoidc_pykd <name of dll> <base address in ida> <full path to idcFile>')
 
 
 def get_linear_address(address):
@@ -61,17 +62,17 @@ def enum_type_info_members(
     p_iref_type_info,
     p_reftype_attr,
     p_iunknown,
-    imm,
     base_addr,
     idaBase,
     dllSize,
     idcFile,
+	textSectionAddress
     ):
     if p_reftype_attr.cFuncs == 0x0:
         return
 
     vtable = 0x0
-    code_base = imm.getKnowledge('codebase')
+    code_base = textSectionAddress
 
     for i in range(p_reftype_attr.cFuncs):
         func_desc = p_iref_type_info.GetFuncDesc(i)
@@ -83,88 +84,87 @@ def enum_type_info_members(
             import struct
             address = lpVtbl[0x0][i] - (value + 0x1000)
             address = address + code_base
-            pages = imm.getMemoryPageByOwnerAddress(base_addr)  # workaround
-            for page in pages:
-                mem = page.getMemory()
-                ndx = mem.find(struct.pack('L', address))
-                if ndx != -1:
-                    vtable = page.getBaseAddress() + ndx
-                    break
-
+            vtable = searchMemory(address, dllSize, struct.pack('L', address))
+			
         if value is not None and lpVtbl[0x0][i] is not None:
             if func_desc.invkind == INVOKE_FUNC or func_desc.invkind == INVOKE_PROPERTYPUT or func_desc.invkind \
 																						== INVOKE_PROPERTYPUTREF:
                 address = lpVtbl[0x0][i] - (value + 0x1000)
                 address = address + code_base
-        else:
+        else:   
             if func_desc.invkind == INVOKE_FUNC or func_desc.invkind == INVOKE_PROPERTYPUT or func_desc.invkind \
 																						== INVOKE_PROPERTYPUTREF:
                 try:
-                    address = imm.readLong(vtable + i * 4)
+                    address = loadDWords(vtable + i * 4, 1)[0]
                 except Exception:
                     address = 0x0
         if address < base_addr + dllSize and address > base_addr:
             idcFile.write('MakeName(0x%08x, "%s");\n' % (address
                           - base_addr + idaBase, str(method_name[0x0])))
         else:
-            imm.log('// Address of %s is out of the module'
+            print('// Address of %s is out of the module'
                     % str(method_name[0x0]))
             idcFile.write('// Address of %s is out of the module\n'
                           % str(method_name[0x0]))
 
+			
+try:
+	activex = sys.argv[0x1]
+	idaBase = int(sys.argv[2], 16)
+	idcFilePath = sys.argv[3]
+	
+except:
+	usage()
+	exit()
 
-def main(args):
-    imm = Debugger()
+#module = imm.getModule(activex)
+try:
+    dll = module(activex)
+except:
+	print('Module "%s" not found. Check the Executable modules (Alt+E)' % activex)
+	exit()
 
-    try:
-        activex = args[0x0]
-        idaBase = int(args[1], 16)
-        idcFilePath = args[2]
-		
-    except:
-        usage(imm)
-        return
+pe = pefile.PE(dll.image(), fast_load=True)
+print("Module at " + hex(dll.begin()))
+textSectionAddress = 0
+for section in pe.sections:
+	print(hex(section.Characteristics) + ' | ' + hex(section.VirtualAddress))
+	if section.Characteristics & 0x20000000 != 0:
+		textSectionAddress = dll.begin() + section.VirtualAddress
+		break
 
-    module = imm.getModule(activex)
-    if not module:
-        return 'Module "%s" not found. Check the Executable modules (Alt+E)' % activex
+tlib = LoadTypeLib(dll.image())
+ticount = tlib.GetTypeInfoCount()
+i = 0x0
 
-    imm.addKnowledge('codebase', module.getCodebase(), force_add=1)
-    tlib = LoadTypeLib(module.getPath())
-    ticount = tlib.GetTypeInfoCount()
-    i = 0x0
+with open(idcFilePath, 'w') as idcFile:
+	while i < ticount:
+		p_itype_info = tlib.GetTypeInfo(i)
+		if p_itype_info:
+			p_type_attr = p_itype_info.GetTypeAttr()
+			if p_type_attr.typekind is TKIND_COCLASS:
+				for ref in range(p_type_attr.cImplTypes):
+					h_ref_type = p_itype_info.GetRefTypeOfImplType(ref)
+					if h_ref_type:
+						p_iref_type_info = p_itype_info.GetRefTypeInfo(h_ref_type)
+						if p_iref_type_info:
+							p_reftype_attr = p_iref_type_info.GetTypeAttr()
+							try:
+								p_iunknown = CoCreateInstance(p_type_attr.guid)
+							except:
+								pass
+							if p_iunknown:
+								enum_type_info_members(
+									p_iref_type_info,
+									p_reftype_attr,
+									p_iunknown,
+									dll.begin(),
+									idaBase,
+									dll.size(),
+									idcFile,
+									textSectionAddress
+									)
+			i += 1
 
-    try:
-        with open(idcFilePath, 'w') as idcFile:
-            while i < ticount:
-                p_itype_info = tlib.GetTypeInfo(i)
-                if p_itype_info:
-                    p_type_attr = p_itype_info.GetTypeAttr()
-                    if p_type_attr.typekind is TKIND_COCLASS:
-                        for ref in range(p_type_attr.cImplTypes):
-                            h_ref_type = p_itype_info.GetRefTypeOfImplType(ref)
-                            if h_ref_type:
-                                p_iref_type_info = p_itype_info.GetRefTypeInfo(h_ref_type)
-                                if p_iref_type_info:
-                                    p_reftype_attr = p_iref_type_info.GetTypeAttr()
-                                    p_iunknown = CoCreateInstance(p_type_attr.guid)
-                                    if p_iunknown:
-                                        enum_type_info_members(
-                                            p_iref_type_info,
-                                            p_reftype_attr,
-                                            p_iunknown,
-                                            imm,
-                                            module.getBaseAddress(),
-                                            idaBase,
-                                            module.getSize(),
-                                            idcFile,
-                                            )
-                    i += 1
-					
-    except IOError:
-        return "Can't open log file"
-		
-    except:
-        return "Error creating some class \(-_-)/"
-
-    return 'Go on and rename em all!'			
+print('Go on and rename em all!')
+exit()	
