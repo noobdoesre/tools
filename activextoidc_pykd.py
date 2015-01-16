@@ -16,7 +16,9 @@ IUf you're doing this on Vista, remember to run regsvr32 from an elevated cmd.ex
 
 """
 from noobdoesre:
-I changed the original script of https://github.com/kbandla/ to bring another one handy function
+I changed the original script of https://github.com/kbandla/ to bring another one handy function - 
+	now you do can export addresses of COM interfaces to IDC and use it to name all known handlers
+Use this script within Windbg
 """
 
 from pykd import *
