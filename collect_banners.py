@@ -1,4 +1,4 @@
-#banner colletor
+#all it does is collecting banners :3
 #usage: ./banner_collector.py %ip_address_range% %out_file%
 #like 97.246.47.0/24
 #or   97.246.47.21-97.246.48.0
@@ -18,11 +18,10 @@ class Banner:
 
 
 class Scan:
-    def __init__(self, ipRange, outFile):
+    def __init__(self, ipRange):
         self.banners = []
         self.numberOfWorkers = 16
         self.lock = Lock()
-        self.outFile = 'out.txt'
         self.id = 0
         self.upHosts = 0
         #check wheter ip's are given as low-high
@@ -40,17 +39,6 @@ class Scan:
                 self.ipRange = (int(IPAddress(ips[0])), int(IPAddress(ips[0])) + 2**(32-int(ips[1])))
             except:
                 return
-        try:
-            with open(outFile, 'w+') as out:
-                self.outFile = outFile
-        except:
-            print('Out file is invalid, using default - out.txt')
-
-
-
-    def EnumAddresses(self):
-        for ip in self.ipRange:
-            print(ip)
 
 
     def IsInitialized(self):
@@ -82,7 +70,6 @@ class Scan:
                         self.banners[t].banner = banner
                     self.banners[t].ips.append(int(IPAddress(ip)))
                     self.banners[t].count += 1
-
             except:
                 pass
 
@@ -110,27 +97,39 @@ class Scan:
             banner.ips = sorted(banner.ips)
 
 
+    def WriteFile(self, fileName):
+        try:
+            with open(fileName, 'w+') as out:
+                pass
+        except:
+            print('Malformed path to output file, using default out.txt')
+            fileName = 'out.txt'
+
+        with open(fileName, 'w+') as out:
+            out.write('Total '+ str(self.upHosts) + 'up hosts\n')
+            for banner in self.banners:
+                out.write(str(banner.banner) + '\n')
+                out.write('Found ' + str(banner.count) + ' devices:\n')
+                for ip in banner.ips:
+                    out.write(str(IPAddress(ip)) + '\n')
+
+
 def main():
     if len(sys.argv) < 3:
-        print("Need more arguments!")
+        print("Usage:")
+        print("./banner_collector.py %ip_address_range% %out_file%")
+        print("%ip_address_range%:")
+        print("97.246.47.0/24")
+        print("97.246.47.21-97.246.48.0")
         exit()
 
-    MyScan = Scan(sys.argv[1], sys.argv[2])
+    MyScan = Scan(sys.argv[1])
     if not MyScan.IsInitialized():
         print("Bad input")
         exit()
 
     MyScan.Scan()
-
-    with open(MyScan.outFile, 'w+') as out:
-        out.write('Total '+ str(MyScan.upHosts) + 'up hosts\n')
-        for banner in MyScan.banners:
-            out.write(str(banner.banner) + '\n')
-            out.write('Found ' + str(banner.count) + ' devices:\n')
-            for ip in banner.ips:
-                out.write(str(IPAddress(ip)) + '\n')
-
-    exit()
+    MyScan.WriteFile(sys.argv[2])
 
 if __name__ == "__main__":
     main()
